@@ -25,6 +25,7 @@ namespace NHN.Power.API.Models
         
         // SMS
         public string SmsProvider { get; set; } = "disabled";
+        public string SmsUsername { get; set; } = string.Empty;
         public string SmsApiKey { get; set; } = string.Empty;
     }
 }

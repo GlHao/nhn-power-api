@@ -62,6 +62,7 @@ builder.Services.AddSingleton<IJwtService, JwtService>();
 builder.Services.AddSingleton<IPasswordService, PasswordService>();
 builder.Services.AddSingleton<IPricingValidationService, PricingValidationService>();
 builder.Services.AddSingleton<IStorageService, StorageService>();
+builder.Services.AddHttpClient<ISmsService, ClickSendSmsService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();
