@@ -58,6 +58,7 @@ namespace NHN.Power.API.DTOs
         public string Status { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public decimal? WebsiteEstimateAmount { get; set; }
+        public string? LeadSourceName { get; set; }
     }
 
     public class QuotePhotoDto

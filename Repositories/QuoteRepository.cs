@@ -178,15 +178,17 @@ namespace NHN.Power.API.Repositories
             
             var sql = @"
                 SELECT 
-                    id AS Id, 
-                    quote_number AS QuoteNumber, 
-                    customer_name AS CustomerName, 
-                    suburb AS Suburb, 
-                    status AS Status, 
-                    created_at AS CreatedAt, 
-                    website_estimate_amount AS WebsiteEstimateAmount
-                FROM quote_requests
-                ORDER BY created_at DESC
+                    q.id AS Id, 
+                    q.quote_number AS QuoteNumber, 
+                    q.customer_name AS CustomerName, 
+                    q.suburb AS Suburb, 
+                    q.status AS Status, 
+                    q.created_at AS CreatedAt, 
+                    q.website_estimate_amount AS WebsiteEstimateAmount,
+                    l.name AS LeadSourceName
+                FROM quote_requests q
+                LEFT JOIN lead_sources l ON q.lead_source_id = l.id
+                ORDER BY q.created_at DESC
                 LIMIT @Limit;";
 
             return await connection.QueryAsync<QuoteListDto>(sql, new { Limit = limit });
