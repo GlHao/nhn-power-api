@@ -83,10 +83,10 @@ namespace NHN.Power.API.Services
                 };
 
                 // Dynamic email templates & field mapping
-                string summaryTitle = isAuntie ? "申请明细 Preview" : "Request Summary";
-                string serviceLabel = isAuntie ? "服务项目" : "Service";
-                string addressLabel = isAuntie ? "服务地址" : "Address";
-                string urgentNotice = isAuntie ? "如需紧急咨询，欢迎直接回复此邮件或拨打客服电话。" : "If you have urgent questions, feel free to reply to this email directly.";
+                string summaryTitle = "Request Summary";
+                string serviceLabel = "Service";
+                string addressLabel = "Address";
+                string urgentNotice = "If you have urgent questions, feel free to reply to this email directly.";
 
                 string serviceSummary = (request.Services != null && request.Services.Count > 0)
                     ? string.Join(", ", request.Services.Select(s => string.IsNullOrEmpty(s.ServiceName) ? s.ServiceCode : s.ServiceName))
@@ -101,7 +101,7 @@ namespace NHN.Power.API.Services
                 // Internal manager email
                 string managerSubject = $"[{brandName}] New Quote Request - {request.CustomerName}";
                 string managerBody = $@"
-<div style=""font-family: Arial, 'Microsoft YaHei', sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;"">
+<div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;"">
     <div style=""background-color: {brandColor}; color: #ffffff; padding: 20px; text-align: center;"">
         <h2 style=""margin: 0; font-size: 20px;"">{brandName} - New Quote Request</h2>
     </div>
@@ -139,20 +139,12 @@ namespace NHN.Power.API.Services
                 // Optional Customer Confirmation Email
                 if (!string.IsNullOrEmpty(request.CustomerEmail))
                 {
-                    string customerSubject = isAuntie 
-                        ? $"【姨姨清洁 Auntie Cleaning】已收到您的清洁报价申请！" 
-                        : $"[{brandName}] Thank you! We received your quote request";
-
-                    string customerGreeting = isAuntie
-                        ? $"亲爱的 {request.CustomerName}："
-                        : $"Hi {request.CustomerName},";
-
-                    string customerIntro = isAuntie
-                        ? "感谢您选择<b>姨姨清洁 Auntie Cleaning</b>！把温馨还给生活，把繁琐清洁交给姨姨。我们已收到您的询价申请，工作人员会尽快为您核算最优惠的细致清洁方案并与您联系。"
-                        : $"Thank you for contacting <strong>{brandName}</strong>! We have received your quote request and our team is reviewing your requirements. We will contact you shortly with a personalized quote.";
+                    string customerSubject = $"[{brandName}] Thank you! We received your quote request";
+                    string customerGreeting = $"Hi {request.CustomerName},";
+                    string customerIntro = $"Thank you for contacting <strong>{brandName}</strong>! We have received your quote request and our team is reviewing your requirements. We will contact you shortly with a personalized quote.";
 
                     string customerBody = $@"
-<div style=""font-family: Arial, 'Microsoft YaHei', sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;"">
+<div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;"">
     <div style=""background-color: {brandColor}; color: #ffffff; padding: 24px; text-align: center;"">
         <h2 style=""margin: 0; font-size: 22px;"">{brandName}</h2>
     </div>
