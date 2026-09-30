@@ -11,6 +11,7 @@ using NHN.Power.API.Models;
 using NHN.Power.API.Infrastructure;
 using NHN.Power.API.Repositories;
 using NHN.Power.API.Services;
+using Microsoft.EntityFrameworkCore;
 
 using Azure.Core.Serialization;
 using System.Text.Json;
@@ -69,7 +70,31 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IQuoteRepository, QuoteRepository>();
 builder.Services.AddScoped<ITrackingRepository, TrackingRepository>();
 
-// (Optional) Remove OpenTelemetry for now to avoid telemetry setup issues, 
-// or keep it if AzureMonitor is needed in V1. We can keep it simple for now.
+// NHN Biz Repositories & Services
+builder.Services.AddScoped<IClientRepository, ClientRepository>();
+builder.Services.AddScoped<IClientService, ClientService>();
+builder.Services.AddScoped<ISiteRepository, SiteRepository>();
+builder.Services.AddScoped<ISiteService, SiteService>();
+builder.Services.AddScoped<IBillingRuleRepository, BillingRuleRepository>();
+builder.Services.AddScoped<IBillingRuleService, BillingRuleService>();
+builder.Services.AddScoped<IScheduleRuleRepository, ScheduleRuleRepository>();
+builder.Services.AddScoped<IScheduleRuleService, ScheduleRuleService>();
+builder.Services.AddScoped<IPublicHolidayHelper, PublicHolidayHelper>();
+builder.Services.AddScoped<IScheduleCalculator, ScheduleCalculator>();
+builder.Services.AddScoped<IBillingCalculator, BillingCalculator>();
+builder.Services.AddScoped<ITaxInvoicePreviewService, TaxInvoicePreviewService>();
+builder.Services.AddScoped<ITaxInvoicePdfService, TaxInvoicePdfService>();
+
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+
+builder.Services.AddDbContext<NHN.Power.API.Data.AppDbContext>(options =>
+{
+    var connectionString = Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING");
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        var validConnString = NHN.Power.API.Data.ConnectionStringHelper.GetValidConnectionString(connectionString);
+        options.UseNpgsql(validConnString);
+    }
+});
 
 builder.Build().Run();

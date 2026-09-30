@@ -10,6 +10,7 @@ namespace NHN.Power.API.Services
     {
         string GeneratePreSignedReadUrl(string fileKey, TimeSpan expiresIn);
         string GeneratePreSignedUploadUrl(string fileKey, TimeSpan expiresIn, string contentType);
+        Task<bool> UploadFileAsync(string fileKey, byte[] contentBytes, string contentType);
     }
 
     public class StorageService : IStorageService
@@ -63,6 +64,31 @@ namespace NHN.Power.API.Services
             };
 
             return _s3Client.GetPreSignedURL(request);
+        }
+
+        public async Task<bool> UploadFileAsync(string fileKey, byte[] contentBytes, string contentType)
+        {
+            if (string.IsNullOrEmpty(_appSettings.R2BucketName))
+                return false;
+
+            try
+            {
+                using var stream = new System.IO.MemoryStream(contentBytes);
+                var putRequest = new PutObjectRequest
+                {
+                    BucketName = _appSettings.R2BucketName,
+                    Key = fileKey,
+                    InputStream = stream,
+                    ContentType = contentType
+                };
+
+                var response = await _s3Client.PutObjectAsync(putRequest);
+                return response.HttpStatusCode == System.Net.HttpStatusCode.OK;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
