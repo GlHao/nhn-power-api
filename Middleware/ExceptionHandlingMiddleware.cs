@@ -35,7 +35,7 @@ namespace NHN.Power.API.Middleware
                     var res = req.CreateResponse(HttpStatusCode.InternalServerError);
                     res.Headers.Add("Content-Type", "application/json; charset=utf-8");
                     
-                    var apiResponse = ApiResponse<object>.CreateError("An unexpected error occurred. Please try again later.");
+                    var apiResponse = ApiResponse<object>.CreateError($"Error: {ex.InnerException?.Message ?? ex.Message}");
                     var json = JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                     
                     await res.WriteStringAsync(json);

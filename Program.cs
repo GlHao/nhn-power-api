@@ -87,14 +87,19 @@ builder.Services.AddScoped<ITaxInvoicePdfService, TaxInvoicePdfService>();
 
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
-builder.Services.AddDbContext<NHN.Power.API.Data.AppDbContext>(options =>
+builder.Services.AddDbContext<NHN.Power.API.Data.AppDbContext>((serviceProvider, options) =>
 {
+    var configuration = serviceProvider.GetRequiredService<IConfiguration>();
     var connectionString = Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING");
-    if (!string.IsNullOrEmpty(connectionString))
+    if (string.IsNullOrEmpty(connectionString))
     {
-        var validConnString = NHN.Power.API.Data.ConnectionStringHelper.GetValidConnectionString(connectionString);
-        options.UseNpgsql(validConnString);
+        connectionString = configuration["AppSettings:SupabaseConnectionString"] 
+                        ?? configuration.GetConnectionString("SupabaseConnectionString")
+                        ?? configuration["SUPABASE_CONNECTION_STRING"];
     }
+
+    var validConnString = NHN.Power.API.Data.ConnectionStringHelper.GetValidConnectionString(connectionString);
+    options.UseNpgsql(validConnString);
 });
 
 builder.Build().Run();

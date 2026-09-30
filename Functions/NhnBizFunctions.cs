@@ -32,11 +32,22 @@ namespace NHN.Power.API.Functions
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "clients")] HttpRequestData req)
         {
             _logger.LogInformation("Getting all clients");
-            var clients = await _clientService.GetAllClientsAsync();
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            await response.WriteAsJsonAsync(clients);
-            return response;
+            try
+            {
+                var clients = await _clientService.GetAllClientsAsync();
+                var response = req.CreateResponse(HttpStatusCode.OK);
+                await response.WriteAsJsonAsync(clients);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting clients: {Message}", ex.Message);
+                var errResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await errResponse.WriteStringAsync($"Error: {ex.Message} | StackTrace: {ex.StackTrace}");
+                return errResponse;
+            }
         }
+
 
         [Function("GetClientById")]
         public async Task<HttpResponseData> GetClientById(
