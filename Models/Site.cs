@@ -22,6 +22,10 @@ namespace NHN.Power.API.Models
         [Column("name")]
         public string Name { get; set; } = string.Empty;
 
+        [Column("alias")]
+        [MaxLength(100)]
+        public string? Alias { get; set; }
+
         [Column("address")]
         public string? Address { get; set; }
 

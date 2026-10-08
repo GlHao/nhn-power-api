@@ -7,6 +7,7 @@ namespace NHN.Power.API.DTOs.Site
         public Guid Id { get; set; }
         public Guid ClientId { get; set; }
         public string Name { get; set; } = string.Empty;
+        public string? Alias { get; set; }
         public string? Address { get; set; }
         public string? Notes { get; set; }
         public bool IsActive { get; set; }
@@ -18,6 +19,7 @@ namespace NHN.Power.API.DTOs.Site
     {
         public Guid ClientId { get; set; }
         public string Name { get; set; } = string.Empty;
+        public string? Alias { get; set; }
         public string? Address { get; set; }
         public string? Notes { get; set; }
     }
@@ -25,6 +27,7 @@ namespace NHN.Power.API.DTOs.Site
     public class UpdateSiteRequest
     {
         public string Name { get; set; } = string.Empty;
+        public string? Alias { get; set; }
         public string? Address { get; set; }
         public string? Notes { get; set; }
     }

@@ -26,6 +26,7 @@ namespace NHN.Power.API.Repositories
     public interface IBillingRuleRepository
     {
         Task<IEnumerable<BillingRule>> GetBySiteIdAsync(Guid siteId);
+        Task<IEnumerable<BillingRule>> GetByEmployeeIdAsync(Guid employeeId);
         Task<BillingRule?> GetByIdAsync(Guid id);
         Task<BillingRule> AddAsync(BillingRule rule);
         Task UpdateAsync(BillingRule rule);
@@ -38,6 +39,15 @@ namespace NHN.Power.API.Repositories
         Task<ServiceScheduleRule?> GetByIdAsync(Guid id);
         Task<ServiceScheduleRule> AddAsync(ServiceScheduleRule rule);
         Task UpdateAsync(ServiceScheduleRule rule);
+        Task SoftDeleteAsync(Guid id);
+    }
+
+    public interface IEmployeeRepository
+    {
+        Task<IEnumerable<Employee>> GetAllActiveAsync();
+        Task<Employee?> GetByIdAsync(Guid id);
+        Task<Employee> AddAsync(Employee employee);
+        Task UpdateAsync(Employee employee);
         Task SoftDeleteAsync(Guid id);
     }
 }

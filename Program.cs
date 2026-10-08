@@ -71,6 +71,8 @@ builder.Services.AddScoped<IQuoteRepository, QuoteRepository>();
 builder.Services.AddScoped<ITrackingRepository, TrackingRepository>();
 
 // NHN Biz Repositories & Services
+builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
 builder.Services.AddScoped<IClientService, ClientService>();
 builder.Services.AddScoped<ISiteRepository, SiteRepository>();
@@ -84,6 +86,8 @@ builder.Services.AddScoped<IScheduleCalculator, ScheduleCalculator>();
 builder.Services.AddScoped<IBillingCalculator, BillingCalculator>();
 builder.Services.AddScoped<ITaxInvoicePreviewService, TaxInvoicePreviewService>();
 builder.Services.AddScoped<ITaxInvoicePdfService, TaxInvoicePdfService>();
+builder.Services.AddScoped<IPayrollCalculatorService, PayrollCalculatorService>();
+builder.Services.AddScoped<IEmployeePaySlipPdfService, EmployeePaySlipPdfService>();
 
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 

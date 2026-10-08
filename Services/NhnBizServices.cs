@@ -7,11 +7,21 @@ using NHN.Power.API.DTOs.Site;
 using NHN.Power.API.DTOs.BillingRule;
 using NHN.Power.API.DTOs.ScheduleRule;
 using NHN.Power.API.DTOs.TaxInvoice;
+using NHN.Power.API.DTOs.Employee;
 using NHN.Power.API.Models;
 using NHN.Power.API.Repositories;
 
 namespace NHN.Power.API.Services
 {
+    public interface IEmployeeService
+    {
+        Task<IEnumerable<EmployeeResponse>> GetAllEmployeesAsync();
+        Task<EmployeeResponse?> GetEmployeeByIdAsync(Guid id);
+        Task<EmployeeResponse> CreateEmployeeAsync(CreateEmployeeRequest request);
+        Task<EmployeeResponse?> UpdateEmployeeAsync(Guid id, UpdateEmployeeRequest request);
+        Task<bool> DeleteEmployeeAsync(Guid id);
+    }
+
     public interface IClientService
     {
         Task<IEnumerable<ClientResponse>> GetAllClientsAsync();
@@ -150,6 +160,84 @@ namespace NHN.Power.API.Services
         }
     }
 
+    public class EmployeeService : IEmployeeService
+    {
+        private readonly IEmployeeRepository _repository;
+
+        public EmployeeService(IEmployeeRepository repository)
+        {
+            _repository = repository;
+        }
+
+        public async Task<IEnumerable<EmployeeResponse>> GetAllEmployeesAsync()
+        {
+            var employees = await _repository.GetAllActiveAsync();
+            return employees.Select(MapToResponse);
+        }
+
+        public async Task<EmployeeResponse?> GetEmployeeByIdAsync(Guid id)
+        {
+            var employee = await _repository.GetByIdAsync(id);
+            return employee != null ? MapToResponse(employee) : null;
+        }
+
+        public async Task<EmployeeResponse> CreateEmployeeAsync(CreateEmployeeRequest request)
+        {
+            var employee = new Employee
+            {
+                Name = request.Name,
+                Phone = request.Phone,
+                Email = request.Email,
+                Notes = request.Notes
+            };
+
+            var created = await _repository.AddAsync(employee);
+            return MapToResponse(created);
+        }
+
+        public async Task<EmployeeResponse?> UpdateEmployeeAsync(Guid id, UpdateEmployeeRequest request)
+        {
+            var employee = await _repository.GetByIdAsync(id);
+            if (employee == null) return null;
+
+            employee.Name = request.Name;
+            employee.Phone = request.Phone;
+            employee.Email = request.Email;
+            employee.Notes = request.Notes;
+            if (request.IsActive.HasValue)
+            {
+                employee.IsActive = request.IsActive.Value;
+            }
+
+            await _repository.UpdateAsync(employee);
+            return MapToResponse(employee);
+        }
+
+        public async Task<bool> DeleteEmployeeAsync(Guid id)
+        {
+            var employee = await _repository.GetByIdAsync(id);
+            if (employee == null) return false;
+
+            await _repository.SoftDeleteAsync(id);
+            return true;
+        }
+
+        private static EmployeeResponse MapToResponse(Employee employee)
+        {
+            return new EmployeeResponse
+            {
+                Id = employee.Id,
+                Name = employee.Name,
+                Phone = employee.Phone,
+                Email = employee.Email,
+                Notes = employee.Notes,
+                IsActive = employee.IsActive,
+                CreatedAt = employee.CreatedAt,
+                UpdatedAt = employee.UpdatedAt
+            };
+        }
+    }
+
     public class SiteService : ISiteService
     {
         private readonly ISiteRepository _repository;
@@ -177,6 +265,7 @@ namespace NHN.Power.API.Services
             {
                 ClientId = request.ClientId,
                 Name = request.Name,
+                Alias = request.Alias,
                 Address = request.Address,
                 Notes = request.Notes
             };
@@ -191,6 +280,7 @@ namespace NHN.Power.API.Services
             if (site == null) return null;
 
             site.Name = request.Name;
+            site.Alias = request.Alias;
             site.Address = request.Address;
             site.Notes = request.Notes;
 
@@ -214,6 +304,7 @@ namespace NHN.Power.API.Services
                 Id = site.Id,
                 ClientId = site.ClientId,
                 Name = site.Name,
+                Alias = site.Alias,
                 Address = site.Address,
                 Notes = site.Notes,
                 IsActive = site.IsActive,
@@ -253,7 +344,9 @@ namespace NHN.Power.API.Services
                 AmountExGst = request.AmountExGst,
                 PublicHolidayAction = request.PublicHolidayAction,
                 PublicHolidayExtraExGst = request.PublicHolidayExtraExGst,
-                Description = request.Description
+                Description = request.Description,
+                EmployeeId = request.EmployeeId,
+                EmployeePayExGst = request.EmployeePayExGst
             };
 
             var created = await _repository.AddAsync(rule);
@@ -270,6 +363,8 @@ namespace NHN.Power.API.Services
             rule.PublicHolidayAction = request.PublicHolidayAction;
             rule.PublicHolidayExtraExGst = request.PublicHolidayExtraExGst;
             rule.Description = request.Description;
+            rule.EmployeeId = request.EmployeeId;
+            rule.EmployeePayExGst = request.EmployeePayExGst;
 
             await _repository.UpdateAsync(rule);
             return MapToResponse(rule);
@@ -295,6 +390,9 @@ namespace NHN.Power.API.Services
                 PublicHolidayAction = rule.PublicHolidayAction,
                 PublicHolidayExtraExGst = rule.PublicHolidayExtraExGst,
                 Description = rule.Description,
+                EmployeeId = rule.EmployeeId,
+                EmployeeName = rule.Employee?.Name,
+                EmployeePayExGst = rule.EmployeePayExGst,
                 IsActive = rule.IsActive,
                 CreatedAt = rule.CreatedAt,
                 UpdatedAt = rule.UpdatedAt

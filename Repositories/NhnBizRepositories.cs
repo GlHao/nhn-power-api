@@ -128,14 +128,24 @@ namespace NHN.Power.API.Repositories
         public async Task<IEnumerable<BillingRule>> GetBySiteIdAsync(Guid siteId)
         {
             return await _context.BillingRules
+                .Include(b => b.Employee)
                 .Where(b => b.SiteId == siteId && b.IsActive && b.DeletedAt == null)
                 .OrderBy(b => b.DayOfWeek)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<BillingRule>> GetByEmployeeIdAsync(Guid employeeId)
+        {
+            return await _context.BillingRules
+                .Include(b => b.Site)
+                .Where(b => b.EmployeeId == employeeId && b.IsActive && b.DeletedAt == null)
                 .ToListAsync();
         }
 
         public async Task<BillingRule?> GetByIdAsync(Guid id)
         {
             return await _context.BillingRules
+                .Include(b => b.Employee)
                 .FirstOrDefaultAsync(b => b.Id == id && b.IsActive && b.DeletedAt == null);
         }
 
@@ -219,6 +229,60 @@ namespace NHN.Power.API.Repositories
                 rule.IsActive = false;
                 rule.DeletedAt = DateTimeOffset.UtcNow;
                 _context.ServiceScheduleRules.Update(rule);
+                await _context.SaveChangesAsync();
+            }
+        }
+    }
+
+    public class EmployeeRepository : IEmployeeRepository
+    {
+        private readonly AppDbContext _context;
+
+        public EmployeeRepository(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<IEnumerable<Employee>> GetAllActiveAsync()
+        {
+            return await _context.Employees
+                .Where(e => e.IsActive && e.DeletedAt == null)
+                .OrderBy(e => e.Name)
+                .ToListAsync();
+        }
+
+        public async Task<Employee?> GetByIdAsync(Guid id)
+        {
+            return await _context.Employees
+                .FirstOrDefaultAsync(e => e.Id == id && e.IsActive && e.DeletedAt == null);
+        }
+
+        public async Task<Employee> AddAsync(Employee employee)
+        {
+            employee.Id = Guid.NewGuid();
+            employee.CreatedAt = DateTimeOffset.UtcNow;
+            employee.UpdatedAt = DateTimeOffset.UtcNow;
+
+            _context.Employees.Add(employee);
+            await _context.SaveChangesAsync();
+            return employee;
+        }
+
+        public async Task UpdateAsync(Employee employee)
+        {
+            employee.UpdatedAt = DateTimeOffset.UtcNow;
+            _context.Employees.Update(employee);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task SoftDeleteAsync(Guid id)
+        {
+            var employee = await GetByIdAsync(id);
+            if (employee != null)
+            {
+                employee.IsActive = false;
+                employee.DeletedAt = DateTimeOffset.UtcNow;
+                _context.Employees.Update(employee);
                 await _context.SaveChangesAsync();
             }
         }

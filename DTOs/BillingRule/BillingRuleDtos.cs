@@ -11,6 +11,9 @@ namespace NHN.Power.API.DTOs.BillingRule
         public string PublicHolidayAction { get; set; } = "no_change";
         public decimal PublicHolidayExtraExGst { get; set; }
         public string? Description { get; set; }
+        public Guid? EmployeeId { get; set; }
+        public string? EmployeeName { get; set; }
+        public decimal EmployeePayExGst { get; set; }
         public bool IsActive { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
@@ -24,6 +27,8 @@ namespace NHN.Power.API.DTOs.BillingRule
         public string PublicHolidayAction { get; set; } = "no_change";
         public decimal PublicHolidayExtraExGst { get; set; }
         public string? Description { get; set; }
+        public Guid? EmployeeId { get; set; }
+        public decimal EmployeePayExGst { get; set; }
     }
 
     public class UpdateBillingRuleRequest
@@ -33,5 +38,7 @@ namespace NHN.Power.API.DTOs.BillingRule
         public string PublicHolidayAction { get; set; } = "no_change";
         public decimal PublicHolidayExtraExGst { get; set; }
         public string? Description { get; set; }
+        public Guid? EmployeeId { get; set; }
+        public decimal EmployeePayExGst { get; set; }
     }
 }

@@ -26,6 +26,15 @@ namespace NHN.Power.API.Models
         [Column("amount_ex_gst", TypeName = "decimal(18,2)")]
         public decimal AmountExGst { get; set; } = 0;
 
+        [Column("employee_id")]
+        public Guid? EmployeeId { get; set; }
+
+        [ForeignKey("EmployeeId")]
+        public Employee? Employee { get; set; }
+
+        [Column("employee_pay_ex_gst", TypeName = "decimal(18,2)")]
+        public decimal EmployeePayExGst { get; set; } = 0;
+
         [Required]
         [Column("public_holiday_action")]
         [MaxLength(50)]
