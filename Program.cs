@@ -89,6 +89,15 @@ builder.Services.AddScoped<ITaxInvoicePdfService, TaxInvoicePdfService>();
 builder.Services.AddScoped<IPayrollCalculatorService, PayrollCalculatorService>();
 builder.Services.AddScoped<IEmployeePaySlipPdfService, EmployeePaySlipPdfService>();
 
+// V3 Receipts, Ledger & Todo DI Registrations
+builder.Services.AddScoped<IAzureDocumentIntelligenceService, AzureDocumentIntelligenceService>();
+builder.Services.AddScoped<IReceiptRepository, ReceiptRepository>();
+builder.Services.AddScoped<IReceiptService, ReceiptService>();
+builder.Services.AddScoped<ILedgerRepository, LedgerRepository>();
+builder.Services.AddScoped<ILedgerService, LedgerService>();
+builder.Services.AddScoped<ITodoRepository, TodoRepository>();
+builder.Services.AddScoped<ITodoService, TodoService>();
+
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 builder.Services.AddDbContext<NHN.Power.API.Data.AppDbContext>((serviceProvider, options) =>

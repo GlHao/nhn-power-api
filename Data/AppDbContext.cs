@@ -15,6 +15,12 @@ namespace NHN.Power.API.Data
         public DbSet<Site> Sites { get; set; } = null!;
         public DbSet<BillingRule> BillingRules { get; set; } = null!;
         public DbSet<ServiceScheduleRule> ServiceScheduleRules { get; set; } = null!;
+        public DbSet<NhnReceipt> Receipts { get; set; } = null!;
+        public DbSet<NhnLedgerRule> LedgerRules { get; set; } = null!;
+        public DbSet<NhnLedgerQuarter> LedgerQuarters { get; set; } = null!;
+        public DbSet<NhnLedgerTransaction> LedgerTransactions { get; set; } = null!;
+        public DbSet<TodoGroup> TodoGroups { get; set; } = null!;
+        public DbSet<TodoItem> TodoItems { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

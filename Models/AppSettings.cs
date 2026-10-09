@@ -27,5 +27,11 @@ namespace NHN.Power.API.Models
         public string SmsProvider { get; set; } = "disabled";
         public string SmsUsername { get; set; } = string.Empty;
         public string SmsApiKey { get; set; } = string.Empty;
+
+        // Azure Document Intelligence OCR
+        public string AzureDocumentIntelligenceEndpoint { get; set; } = string.Empty;
+        public string AzureDocumentIntelligenceKey { get; set; } = string.Empty;
+        public string AzureDocumentIntelligenceApiVersion { get; set; } = "2024-11-30";
+        public string AzureDocumentIntelligenceReceiptModel { get; set; } = "prebuilt-receipt";
     }
 }
