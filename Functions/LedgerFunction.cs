@@ -218,6 +218,31 @@ namespace NHN.Power.API.Functions
             return response;
         }
 
+        [Function("DeleteQuarter")]
+        public async Task<HttpResponseData> DeleteQuarter(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "ledger/quarters/{quarterId}")] HttpRequestData req,
+            string quarterId)
+        {
+            if (!Guid.TryParse(quarterId, out var qId))
+            {
+                var badReq = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Invalid Quarter ID format."));
+                return badReq;
+            }
+
+            bool success = await _ledgerService.DeleteQuarterAsync(qId);
+            if (!success)
+            {
+                var notFound = req.CreateResponse(HttpStatusCode.NotFound);
+                await notFound.WriteAsJsonAsync(ApiResponse<object>.CreateError("Quarter not found."));
+                return notFound;
+            }
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            await response.WriteAsJsonAsync(ApiResponse<string>.CreateSuccess("Quarter deleted successfully."));
+            return response;
+        }
+
         [Function("ExportQuarterExcel")]
         public async Task<HttpResponseData> ExportQuarterExcel(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "ledger/quarters/{quarterId}/export")] HttpRequestData req,

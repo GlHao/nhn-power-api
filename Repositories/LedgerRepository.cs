@@ -54,6 +54,22 @@ namespace NHN.Power.API.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task DeleteQuarterAsync(Guid id)
+        {
+            var quarter = await _context.LedgerQuarters.FirstOrDefaultAsync(q => q.Id == id);
+            if (quarter != null)
+            {
+                // Cascade delete transactions
+                var txs = await _context.LedgerTransactions.Where(t => t.QuarterId == id).ToListAsync();
+                if (txs.Any())
+                {
+                    _context.LedgerTransactions.RemoveRange(txs);
+                }
+                _context.LedgerQuarters.Remove(quarter);
+                await _context.SaveChangesAsync();
+            }
+        }
+
         // Transactions
         public async Task<IEnumerable<NhnLedgerTransaction>> GetTransactionsByQuarterIdAsync(Guid quarterId)
         {
@@ -142,10 +158,40 @@ namespace NHN.Power.API.Repositories
             return rule;
         }
 
+        public async Task AddRulesAsync(IEnumerable<NhnLedgerRule> rules)
+        {
+            var ruleList = rules.ToList();
+            if (!ruleList.Any()) return;
+
+            foreach (var r in ruleList)
+            {
+                if (r.Id == Guid.Empty) r.Id = Guid.NewGuid();
+                r.CreatedAt = DateTimeOffset.UtcNow;
+                r.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            await _context.LedgerRules.AddRangeAsync(ruleList);
+            await _context.SaveChangesAsync();
+        }
+
         public async Task UpdateRuleAsync(NhnLedgerRule rule)
         {
             rule.UpdatedAt = DateTimeOffset.UtcNow;
             _context.LedgerRules.Update(rule);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateRulesAsync(IEnumerable<NhnLedgerRule> rules)
+        {
+            var ruleList = rules.ToList();
+            if (!ruleList.Any()) return;
+
+            foreach (var r in ruleList)
+            {
+                r.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            _context.LedgerRules.UpdateRange(ruleList);
             await _context.SaveChangesAsync();
         }
 

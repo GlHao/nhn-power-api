@@ -187,8 +187,52 @@ namespace NHN.Power.API.Services
             }
         }
 
+        private static bool _fontRegistered = false;
+        private static readonly object _fontLock = new object();
+
+        private static void EnsureChineseFontRegistered()
+        {
+            if (_fontRegistered) return;
+            lock (_fontLock)
+            {
+                if (_fontRegistered) return;
+                try
+                {
+                    string[] possibleFontPaths = {
+                        @"C:\Windows\Fonts\msyh.ttc",
+                        @"C:\Windows\Fonts\msyh.ttf",
+                        @"C:\Windows\Fonts\simhei.ttf",
+                        @"C:\Windows\Fonts\simsun.ttc",
+                        @"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                        @"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                        @"/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"
+                    };
+
+                    foreach (var path in possibleFontPaths)
+                    {
+                        if (File.Exists(path))
+                        {
+                            using var fs = File.OpenRead(path);
+                            QuestPDF.Drawing.FontManager.RegisterFont(fs);
+                            break;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore font registration error and fallback to standard font
+                }
+                finally
+                {
+                    _fontRegistered = true;
+                }
+            }
+        }
+
         public byte[] GeneratePdf(PaySlipPdfRequestDto request)
         {
+            EnsureChineseFontRegistered();
+
             var document = Document.Create(container =>
             {
                 container.Page(page =>
@@ -196,7 +240,7 @@ namespace NHN.Power.API.Services
                     page.Size(PageSizes.A4);
                     page.Margin(30, Unit.Point);
                     page.PageColor(Colors.White);
-                    page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Arial"));
+                    page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Microsoft YaHei", "PingFang SC", "SimHei", "Noto Sans CJK SC", "Arial"));
 
                     page.Header().Element(c => ComposeHeader(c, request));
                     page.Content().Element(c => ComposeContent(c, request));

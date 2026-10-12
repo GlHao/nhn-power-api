@@ -13,6 +13,7 @@ namespace NHN.Power.API.Repositories
         Task<NhnLedgerQuarter?> GetQuarterByYearQuarterAsync(string yearQuarter);
         Task<NhnLedgerQuarter> AddQuarterAsync(NhnLedgerQuarter quarter);
         Task UpdateQuarterAsync(NhnLedgerQuarter quarter);
+        Task DeleteQuarterAsync(Guid id);
 
         // Transactions
         Task<IEnumerable<NhnLedgerTransaction>> GetTransactionsByQuarterIdAsync(Guid quarterId);
@@ -25,7 +26,9 @@ namespace NHN.Power.API.Repositories
         Task<IEnumerable<NhnLedgerRule>> GetAllRulesAsync();
         Task<NhnLedgerRule?> GetRuleByKeywordAsync(string keyword);
         Task<NhnLedgerRule> AddRuleAsync(NhnLedgerRule rule);
+        Task AddRulesAsync(IEnumerable<NhnLedgerRule> rules);
         Task UpdateRuleAsync(NhnLedgerRule rule);
+        Task UpdateRulesAsync(IEnumerable<NhnLedgerRule> rules);
         Task DeleteRuleAsync(Guid id);
     }
 }

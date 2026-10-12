@@ -15,6 +15,7 @@ namespace NHN.Power.API.Services
         Task<IEnumerable<LedgerTransactionDto>> GetQuarterTransactionsAsync(Guid quarterId);
         Task<LedgerTransactionDto?> UpdateTransactionAsync(Guid id, UpdateLedgerTransactionDto dto);
         Task<bool> FinalizeQuarterAsync(Guid quarterId);
+        Task<bool> DeleteQuarterAsync(Guid quarterId);
         Task<byte[]> ExportQuarterExcelAsync(Guid quarterId);
 
         Task<IEnumerable<LedgerRuleDto>> GetAllRulesAsync();

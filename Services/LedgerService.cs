@@ -36,10 +36,57 @@ namespace NHN.Power.API.Services
         public async Task<ImportHistoryResultDto> ImportHistoricalExcelAsync(Stream fileStream)
         {
             var result = new ImportHistoryResultDto();
-            var rows = fileStream.Query(useHeaderRow: true).ToList();
 
-            int rulesLearned = 0;
-            int rulesUpdated = 0;
+            // 1. Identify sheets and find the sheet that contains transaction descriptions
+            var sheetNames = fileStream.GetSheetNames()?.ToList() ?? new List<string>();
+            List<object> rows = new List<object>();
+
+            // Prioritize sheets named 'CSVData', 'Transactions', 'Ledger', or any sheet having actual data
+            string? targetSheet = sheetNames.FirstOrDefault(s => 
+                s.Equals("CSVData", StringComparison.OrdinalIgnoreCase) || 
+                s.Equals("Transactions", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("Data", StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrEmpty(targetSheet))
+            {
+                fileStream.Position = 0;
+                rows = fileStream.Query(sheetName: targetSheet, useHeaderRow: true).ToList();
+            }
+            else
+            {
+                // Iterate sheets to find the one with BANK DESCRIPTION / 说明
+                foreach (var sheet in sheetNames)
+                {
+                    fileStream.Position = 0;
+                    var candidateRows = fileStream.Query(sheetName: sheet, useHeaderRow: true).ToList();
+                    if (candidateRows.Any())
+                    {
+                        var firstRow = candidateRows.First() as IDictionary<string, object>;
+                        if (firstRow != null && firstRow.Keys.Any(k => k.Contains("DESCRIPTION", StringComparison.OrdinalIgnoreCase) || k.Contains("说明", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            rows = candidateRows;
+                            break;
+                        }
+                    }
+                }
+
+                // Fallback to default query if no specific sheet matched
+                if (!rows.Any())
+                {
+                    fileStream.Position = 0;
+                    rows = fileStream.Query(useHeaderRow: true).ToList();
+                }
+            }
+
+            // 2. Preload existing rules into memory dictionary (Case-insensitive)
+            var existingRulesList = (await _ledgerRepository.GetAllRulesAsync()).ToList();
+            var existingRulesMap = existingRulesList.ToDictionary(r => r.Keyword.Trim().ToUpperInvariant(), r => r);
+
+            var newRulesToAdd = new Dictionary<string, NhnLedgerRule>(StringComparer.OrdinalIgnoreCase);
+            var rulesToUpdate = new Dictionary<string, NhnLedgerRule>(StringComparer.OrdinalIgnoreCase);
+
+            // 3. Process rows in memory: both rule extraction and transaction parsing
+            var parsedTransactions = new List<(DateTime Date, decimal Amount, decimal Gst, string BankDesc, decimal? Balance, string Note)>();
 
             foreach (IDictionary<string, object> row in rows)
             {
@@ -47,42 +94,127 @@ namespace NHN.Power.API.Services
 
                 string bankDesc = GetColumnValue(row, "BANK DESCRIPTION", "Description", "bank_description");
                 string note = GetColumnValue(row, "说明", "Notes", "category_note", "Category");
+                string dateStr = GetColumnValue(row, "DATE", "Date", "transaction_date");
+                string amountStr = GetColumnValue(row, "AMOUNT", "Amount");
+                string gstStr = GetColumnValue(row, "GST", "Gst", "gst_amount");
+                string balanceStr = GetColumnValue(row, "BALANCE", "Balance");
 
-                if (string.IsNullOrWhiteSpace(bankDesc) || string.IsNullOrWhiteSpace(note))
-                    continue;
+                bankDesc = bankDesc?.Trim() ?? string.Empty;
+                note = note?.Trim() ?? string.Empty;
 
-                bankDesc = bankDesc.Trim();
-                note = note.Trim();
-
-                // Extract core keyword from Bank Description
-                string keyword = ExtractCoreKeyword(bankDesc);
-                if (string.IsNullOrWhiteSpace(keyword)) continue;
-
-                var existingRule = await _ledgerRepository.GetRuleByKeywordAsync(keyword);
-                if (existingRule != null)
+                // Extract rule if bankDesc and note are present
+                if (!string.IsNullOrWhiteSpace(bankDesc) && !string.IsNullOrWhiteSpace(note))
                 {
-                    existingRule.CategoryNote = note;
-                    await _ledgerRepository.UpdateRuleAsync(existingRule);
-                    rulesUpdated++;
-                }
-                else
-                {
-                    var newRule = new NhnLedgerRule
+                    string keyword = ExtractCoreKeyword(bankDesc);
+                    if (!string.IsNullOrWhiteSpace(keyword))
                     {
-                        Id = Guid.NewGuid(),
-                        Keyword = keyword,
-                        CategoryNote = note,
-                        CreatedAt = DateTimeOffset.UtcNow,
-                        UpdatedAt = DateTimeOffset.UtcNow
-                    };
-                    await _ledgerRepository.AddRuleAsync(newRule);
-                    rulesLearned++;
+                        string keyUpper = keyword.ToUpperInvariant();
+
+                        if (existingRulesMap.TryGetValue(keyUpper, out var existingRule))
+                        {
+                            if (existingRule.CategoryNote != note)
+                            {
+                                existingRule.CategoryNote = note;
+                                rulesToUpdate[keyUpper] = existingRule;
+                            }
+                        }
+                        else if (newRulesToAdd.TryGetValue(keyUpper, out var pendingNewRule))
+                        {
+                            pendingNewRule.CategoryNote = note;
+                        }
+                        else
+                        {
+                            var newRule = new NhnLedgerRule
+                            {
+                                Id = Guid.NewGuid(),
+                                Keyword = keyword,
+                                CategoryNote = note,
+                                CreatedAt = DateTimeOffset.UtcNow,
+                                UpdatedAt = DateTimeOffset.UtcNow
+                            };
+                            newRulesToAdd[keyUpper] = newRule;
+                        }
+                    }
+                }
+
+                // If row has valid date and amount, collect for Quarter ledger creation
+                if (!string.IsNullOrWhiteSpace(dateStr) && !string.IsNullOrWhiteSpace(amountStr))
+                {
+                    if (TryParseDate(dateStr, out DateTime txDate) &&
+                        decimal.TryParse(CleanAmountString(amountStr), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal txAmount))
+                    {
+                        decimal txGst = 0m;
+                        if (!string.IsNullOrWhiteSpace(gstStr))
+                        {
+                            decimal.TryParse(CleanAmountString(gstStr), NumberStyles.Any, CultureInfo.InvariantCulture, out txGst);
+                        }
+
+                        decimal? txBalance = null;
+                        if (!string.IsNullOrWhiteSpace(balanceStr) &&
+                            decimal.TryParse(CleanAmountString(balanceStr), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal bal))
+                        {
+                            txBalance = bal;
+                        }
+
+                        parsedTransactions.Add((txDate, txAmount, txGst, bankDesc, txBalance, note));
+                    }
                 }
             }
 
-            result.RulesLearned = rulesLearned;
-            result.RulesUpdated = rulesUpdated;
+            // 4. Batch persist rules to database
+            if (newRulesToAdd.Any())
+            {
+                await _ledgerRepository.AddRulesAsync(newRulesToAdd.Values);
+                result.RulesLearned = newRulesToAdd.Count;
+            }
 
+            if (rulesToUpdate.Any())
+            {
+                await _ledgerRepository.UpdateRulesAsync(rulesToUpdate.Values);
+                result.RulesUpdated = rulesToUpdate.Count;
+            }
+
+            // 5. Automatically create or populate the Quarter ledger card with transactions
+            if (parsedTransactions.Any())
+            {
+                var sampleDate = parsedTransactions.First().Date;
+                string yearQuarter = GetYearQuarter(sampleDate);
+
+                var quarter = await _ledgerRepository.GetQuarterByYearQuarterAsync(yearQuarter);
+                if (quarter == null)
+                {
+                    quarter = await _ledgerRepository.AddQuarterAsync(new NhnLedgerQuarter
+                    {
+                        Id = Guid.NewGuid(),
+                        YearQuarter = yearQuarter,
+                        Status = "draft",
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    });
+                }
+
+                // Clean previous transactions for this quarter to prevent duplicates
+                await _ledgerRepository.DeleteTransactionsByQuarterIdAsync(quarter.Id);
+
+                var newTxEntities = parsedTransactions.Select(t => new NhnLedgerTransaction
+                {
+                    Id = Guid.NewGuid(),
+                    QuarterId = quarter.Id,
+                    TransactionDate = t.Date,
+                    Amount = t.Amount,
+                    GstAmount = t.Gst,
+                    BankDescription = t.BankDesc,
+                    Balance = t.Balance,
+                    Notes = string.IsNullOrWhiteSpace(t.Note) ? null : t.Note,
+                    Status = !string.IsNullOrWhiteSpace(t.Note) ? "rule_matched" : "uncategorized",
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                }).ToList();
+
+                await _ledgerRepository.AddTransactionsAsync(newTxEntities);
+            }
+
+            // 6. Return updated rules
             var allRules = await _ledgerRepository.GetAllRulesAsync();
             result.Rules = allRules.Select(r => new LedgerRuleDto
             {
@@ -364,6 +496,15 @@ namespace NHN.Power.API.Services
             return true;
         }
 
+        public async Task<bool> DeleteQuarterAsync(Guid quarterId)
+        {
+            var quarter = await _ledgerRepository.GetQuarterByIdAsync(quarterId);
+            if (quarter == null) return false;
+
+            await _ledgerRepository.DeleteQuarterAsync(quarterId);
+            return true;
+        }
+
         public async Task<byte[]> ExportQuarterExcelAsync(Guid quarterId)
         {
             var txs = await _ledgerRepository.GetTransactionsByQuarterIdAsync(quarterId);
@@ -458,22 +599,52 @@ namespace NHN.Power.API.Services
 
         private string ExtractCoreKeyword(string bankDesc)
         {
-            // Clean up merchant keyword from bank description
-            // Examples: "7-ELEVEN 1283 FRANKSTON AU Card xx1241..." -> "7-ELEVEN"
-            // "PAYROLLER.COM.AU" -> "PAYROLLER"
-            // "TOYOTA FINANCE 13886075" -> "TOYOTA FINANCE"
-            // "Transfer to xx8309 CommBank app director" -> "director"
-            if (bankDesc.Contains("director", StringComparison.OrdinalIgnoreCase)) return "director";
-            if (bankDesc.Contains("RENT", StringComparison.OrdinalIgnoreCase)) return "RENT";
-            if (bankDesc.Contains("PAYROLLER", StringComparison.OrdinalIgnoreCase)) return "PAYROLLER";
-            if (bankDesc.Contains("EASTLINK", StringComparison.OrdinalIgnoreCase)) return "EASTLINK";
-            if (bankDesc.Contains("TOYOTA FINANCE", StringComparison.OrdinalIgnoreCase)) return "TOYOTA FINANCE";
-            if (bankDesc.Contains("POINT PARKING", StringComparison.OrdinalIgnoreCase)) return "POINT PARKING";
-            if (bankDesc.Contains("RACV", StringComparison.OrdinalIgnoreCase)) return "RACV";
-            if (bankDesc.Contains("TAX OFFICE", StringComparison.OrdinalIgnoreCase)) return "TAX OFFICE";
+            if (string.IsNullOrWhiteSpace(bankDesc)) return string.Empty;
 
-            var firstToken = bankDesc.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-            return firstToken ?? bankDesc;
+            // 1. High priority common keywords
+            string[] knownEntities = {
+                "7-ELEVEN", "PAYROLLER", "EASTLINK", "TOYOTA FINANCE", "POINT PARKING",
+                "RACV", "TAX OFFICE", "BPAY", "WOOLWORTHS", "COLES", "BUNNINGS", "OFFICEWORKS",
+                "MATE COMMUNICATE", "ROARING BEAR", "I-MED RADIOLOGY", "CALTEX", "AMPOL", "BP ",
+                "DIRECTOR", "RENT", "SALARY", "WAGE"
+            };
+
+            foreach (var entity in knownEntities)
+            {
+                if (bankDesc.Contains(entity, StringComparison.OrdinalIgnoreCase))
+                {
+                    return entity.Trim();
+                }
+            }
+
+            // 2. Handle Australian banking prefixes: "Fast Transfer From ...", "Transfer to ...", "Direct Debit ..."
+            string text = bankDesc.Trim();
+            string[] noisePrefixes = {
+                "Fast Transfer From ", "Fast Transfer To ", "Transfer from ", "Transfer to ",
+                "Direct Debit ", "Direct Credit ", "Internet Transfer ", "Withdrawal "
+            };
+
+            foreach (var p in noisePrefixes)
+            {
+                if (text.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+                {
+                    text = text.Substring(p.Length).Trim();
+                    break;
+                }
+            }
+
+            // 3. If after removing noise prefix we still have words, take first meaningful 1-2 words
+            var tokens = text.Split(new[] { ' ', '/', '-', '_' }, StringSplitOptions.RemoveEmptyEntries)
+                             .Where(t => !string.IsNullOrWhiteSpace(t) && t.Length > 1 && !t.StartsWith("xx", StringComparison.OrdinalIgnoreCase))
+                             .Take(2)
+                             .ToList();
+
+            if (tokens.Any())
+            {
+                return string.Join(" ", tokens);
+            }
+
+            return bankDesc.Trim();
         }
 
         private List<string> ParseCsvLine(string line)
