@@ -3,9 +3,19 @@ using System.Collections.Generic;
 
 namespace NHN.Power.API.DTOs.Ledger
 {
+    public class LedgerBusinessDto
+    {
+        public Guid Id { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public int SortOrder { get; set; }
+    }
+
     public class LedgerQuarterSummaryDto
     {
         public Guid Id { get; set; }
+        public string Business { get; set; } = "NHN POWER";
         public string YearQuarter { get; set; } = string.Empty;
         public string Status { get; set; } = "draft"; // draft | completed
         public int TotalTransactions { get; set; }
@@ -22,6 +32,7 @@ namespace NHN.Power.API.DTOs.Ledger
     {
         public Guid Id { get; set; }
         public Guid QuarterId { get; set; }
+        public string Business { get; set; } = "NHN POWER";
         public string YearQuarter { get; set; } = string.Empty;
         public DateTime TransactionDate { get; set; }
         public decimal Amount { get; set; }
@@ -70,6 +81,7 @@ namespace NHN.Power.API.DTOs.Ledger
 
     public class ImportCsvResultDto
     {
+        public string Business { get; set; } = "NHN POWER";
         public string YearQuarter { get; set; } = string.Empty;
         public Guid QuarterId { get; set; }
         public int TotalTransactions { get; set; }

@@ -16,6 +16,7 @@ namespace NHN.Power.API.Functions
     {
         public string FileName { get; set; } = "import.xlsx";
         public string Base64Data { get; set; } = string.Empty;
+        public string? Business { get; set; } = "NHN POWER";
     }
 
     public class LedgerFunction
@@ -29,12 +30,25 @@ namespace NHN.Power.API.Functions
             _logger = logger;
         }
 
+        [Function("GetBusinesses")]
+        public async Task<HttpResponseData> GetBusinesses(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "ledger/businesses")] HttpRequestData req)
+        {
+            _logger.LogInformation("Getting all active businesses.");
+            var businesses = await _ledgerService.GetActiveBusinessesAsync();
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            await response.WriteAsJsonAsync(ApiResponse<object>.CreateSuccess(businesses));
+            return response;
+        }
+
         [Function("GetQuarters")]
         public async Task<HttpResponseData> GetQuarters(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "ledger/quarters")] HttpRequestData req)
         {
             _logger.LogInformation("Getting all ledger quarters summary.");
-            var summaries = await _ledgerService.GetQuartersSummaryAsync();
+            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            string? business = query["business"];
+            var summaries = await _ledgerService.GetQuartersSummaryAsync(business);
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(ApiResponse<object>.CreateSuccess(summaries));
@@ -66,6 +80,9 @@ namespace NHN.Power.API.Functions
             _logger.LogInformation("Importing historical Excel for rule learning.");
             try
             {
+                var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+                string? business = query["business"];
+
                 Stream fileStream;
                 if (req.Headers.TryGetValues("Content-Type", out var contentTypes) && 
                     string.Join("", contentTypes).Contains("multipart/form-data"))
@@ -82,11 +99,15 @@ namespace NHN.Power.API.Functions
                         await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Base64Data or file content is required."));
                         return badReq;
                     }
+                    if (!string.IsNullOrWhiteSpace(dto.Business))
+                    {
+                        business = dto.Business;
+                    }
                     byte[] bytes = Convert.FromBase64String(dto.Base64Data);
                     fileStream = new MemoryStream(bytes);
                 }
 
-                var result = await _ledgerService.ImportHistoricalExcelAsync(fileStream);
+                var result = await _ledgerService.ImportHistoricalExcelAsync(fileStream, business);
                 var response = req.CreateResponse(HttpStatusCode.OK);
                 await response.WriteAsJsonAsync(ApiResponse<ImportHistoryResultDto>.CreateSuccess(result));
                 return response;
@@ -107,6 +128,9 @@ namespace NHN.Power.API.Functions
             _logger.LogInformation("Importing bank CSV file.");
             try
             {
+                var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+                string? business = query["business"];
+
                 Stream fileStream;
                 if (req.Headers.TryGetValues("Content-Type", out var contentTypes) && 
                     string.Join("", contentTypes).Contains("multipart/form-data"))
@@ -123,11 +147,15 @@ namespace NHN.Power.API.Functions
                         await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Base64Data or file content is required."));
                         return badReq;
                     }
+                    if (!string.IsNullOrWhiteSpace(dto.Business))
+                    {
+                        business = dto.Business;
+                    }
                     byte[] bytes = Convert.FromBase64String(dto.Base64Data);
                     fileStream = new MemoryStream(bytes);
                 }
 
-                var result = await _ledgerService.ImportBankCsvAsync(fileStream);
+                var result = await _ledgerService.ImportBankCsvAsync(fileStream, business);
                 var response = req.CreateResponse(HttpStatusCode.OK);
                 await response.WriteAsJsonAsync(ApiResponse<ImportCsvResultDto>.CreateSuccess(result));
                 return response;
@@ -190,6 +218,31 @@ namespace NHN.Power.API.Functions
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(ApiResponse<LedgerTransactionDto>.CreateSuccess(updated));
+            return response;
+        }
+
+        [Function("DeleteTransaction")]
+        public async Task<HttpResponseData> DeleteTransaction(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "ledger/transactions/{id}")] HttpRequestData req,
+            string id)
+        {
+            if (!Guid.TryParse(id, out var txId))
+            {
+                var badReq = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Invalid Transaction ID format."));
+                return badReq;
+            }
+
+            var success = await _ledgerService.DeleteTransactionAsync(txId);
+            if (!success)
+            {
+                var notFound = req.CreateResponse(HttpStatusCode.NotFound);
+                await notFound.WriteAsJsonAsync(ApiResponse<object>.CreateError("Transaction not found."));
+                return notFound;
+            }
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            await response.WriteAsJsonAsync(ApiResponse<bool>.CreateSuccess(true));
             return response;
         }
 

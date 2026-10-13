@@ -33,8 +33,22 @@ namespace NHN.Power.API.Services
             _logger = logger;
         }
 
-        public async Task<ImportHistoryResultDto> ImportHistoricalExcelAsync(Stream fileStream)
+        public async Task<IEnumerable<LedgerBusinessDto>> GetActiveBusinessesAsync()
         {
+            var businesses = await _ledgerRepository.GetActiveBusinessesAsync();
+            return businesses.Select(b => new LedgerBusinessDto
+            {
+                Id = b.Id,
+                Code = b.Code,
+                Name = b.Name,
+                Description = b.Description,
+                SortOrder = b.SortOrder
+            });
+        }
+
+        public async Task<ImportHistoryResultDto> ImportHistoricalExcelAsync(Stream fileStream, string? business = null)
+        {
+            business = string.IsNullOrWhiteSpace(business) ? "NHN POWER" : business.Trim();
             var result = new ImportHistoryResultDto();
 
             // 1. Identify sheets and find the sheet that contains transaction descriptions
@@ -149,6 +163,10 @@ namespace NHN.Power.API.Services
                             decimal.TryParse(CleanAmountString(gstStr), NumberStyles.Any, CultureInfo.InvariantCulture, out txGst);
                         }
 
+                        // Ensure GST sign matches Amount direction
+                        if (txAmount < 0 && txGst > 0) txGst = -txGst;
+                        else if (txAmount > 0 && txGst < 0) txGst = Math.Abs(txGst);
+
                         decimal? txBalance = null;
                         if (!string.IsNullOrWhiteSpace(balanceStr) &&
                             decimal.TryParse(CleanAmountString(balanceStr), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal bal))
@@ -180,12 +198,13 @@ namespace NHN.Power.API.Services
                 var sampleDate = parsedTransactions.First().Date;
                 string yearQuarter = GetYearQuarter(sampleDate);
 
-                var quarter = await _ledgerRepository.GetQuarterByYearQuarterAsync(yearQuarter);
+                var quarter = await _ledgerRepository.GetQuarterByBusinessAndYearQuarterAsync(business, yearQuarter);
                 if (quarter == null)
                 {
                     quarter = await _ledgerRepository.AddQuarterAsync(new NhnLedgerQuarter
                     {
                         Id = Guid.NewGuid(),
+                        Business = business,
                         YearQuarter = yearQuarter,
                         Status = "draft",
                         CreatedAt = DateTimeOffset.UtcNow,
@@ -228,8 +247,9 @@ namespace NHN.Power.API.Services
             return result;
         }
 
-        public async Task<ImportCsvResultDto> ImportBankCsvAsync(Stream fileStream)
+        public async Task<ImportCsvResultDto> ImportBankCsvAsync(Stream fileStream, string? business = null)
         {
+            business = string.IsNullOrWhiteSpace(business) ? "NHN POWER" : business.Trim();
             using var reader = new StreamReader(fileStream, Encoding.UTF8);
             var lines = new List<string>();
             while (!reader.EndOfStream)
@@ -276,12 +296,13 @@ namespace NHN.Power.API.Services
                 .OrderByDescending(g => g.Count())
                 .First().Key;
 
-            var quarter = await _ledgerRepository.GetQuarterByYearQuarterAsync(yearQuarter);
+            var quarter = await _ledgerRepository.GetQuarterByBusinessAndYearQuarterAsync(business, yearQuarter);
             if (quarter == null)
             {
                 quarter = await _ledgerRepository.AddQuarterAsync(new NhnLedgerQuarter
                 {
                     Id = Guid.NewGuid(),
+                    Business = business,
                     YearQuarter = yearQuarter,
                     Status = "draft",
                     CreatedAt = DateTimeOffset.UtcNow,
@@ -342,6 +363,7 @@ namespace NHN.Power.API.Services
 
             return new ImportCsvResultDto
             {
+                Business = business,
                 YearQuarter = yearQuarter,
                 QuarterId = quarter.Id,
                 TotalTransactions = newTransactions.Count,
@@ -391,7 +413,7 @@ namespace NHN.Power.API.Services
                     matchedReceiptsSet.Add(candidate.Id);
 
                     // Update Transaction in memory
-                    tx.GstAmount = candidate.GstAmount;
+                    tx.GstAmount = tx.Amount < 0 ? -Math.Abs(candidate.GstAmount) : Math.Abs(candidate.GstAmount);
                     tx.MatchedReceiptId = candidate.Id;
                     tx.Status = "receipt_matched";
                     txsToUpdate.Add(tx);
@@ -418,9 +440,9 @@ namespace NHN.Power.API.Services
             return matchCount;
         }
 
-        public async Task<IEnumerable<LedgerQuarterSummaryDto>> GetQuartersSummaryAsync()
+        public async Task<IEnumerable<LedgerQuarterSummaryDto>> GetQuartersSummaryAsync(string? business = null)
         {
-            var quarters = await _ledgerRepository.GetAllQuartersAsync();
+            var quarters = await _ledgerRepository.GetAllQuartersAsync(business);
             var list = new List<LedgerQuarterSummaryDto>();
 
             foreach (var q in quarters)
@@ -430,6 +452,7 @@ namespace NHN.Power.API.Services
                 list.Add(new LedgerQuarterSummaryDto
                 {
                     Id = q.Id,
+                    Business = q.Business,
                     YearQuarter = q.YearQuarter,
                     Status = q.Status,
                     TotalTransactions = txs.Count,
@@ -450,12 +473,14 @@ namespace NHN.Power.API.Services
         {
             var quarter = await _ledgerRepository.GetQuarterByIdAsync(quarterId);
             string yearQuarter = quarter?.YearQuarter ?? string.Empty;
+            string business = quarter?.Business ?? "NHN POWER";
 
             var txs = await _ledgerRepository.GetTransactionsByQuarterIdAsync(quarterId);
             return txs.Select(t => new LedgerTransactionDto
             {
                 Id = t.Id,
                 QuarterId = t.QuarterId,
+                Business = business,
                 YearQuarter = yearQuarter,
                 TransactionDate = t.TransactionDate,
                 Amount = t.Amount,
@@ -489,6 +514,7 @@ namespace NHN.Power.API.Services
             {
                 Id = tx.Id,
                 QuarterId = tx.QuarterId,
+                Business = quarter?.Business ?? "NHN POWER",
                 YearQuarter = quarter?.YearQuarter ?? string.Empty,
                 TransactionDate = tx.TransactionDate,
                 Amount = tx.Amount,
@@ -503,6 +529,15 @@ namespace NHN.Power.API.Services
                 CreatedAt = tx.CreatedAt,
                 UpdatedAt = tx.UpdatedAt
             };
+        }
+
+        public async Task<bool> DeleteTransactionAsync(Guid id)
+        {
+            var tx = await _ledgerRepository.GetTransactionByIdAsync(id);
+            if (tx == null) return false;
+
+            await _ledgerRepository.DeleteTransactionAsync(id);
+            return true;
         }
 
         public async Task<bool> FinalizeQuarterAsync(Guid quarterId)

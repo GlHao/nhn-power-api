@@ -8,12 +8,14 @@ namespace NHN.Power.API.Services
 {
     public interface ILedgerService
     {
-        Task<ImportHistoryResultDto> ImportHistoricalExcelAsync(Stream fileStream);
-        Task<ImportCsvResultDto> ImportBankCsvAsync(Stream fileStream);
+        Task<IEnumerable<LedgerBusinessDto>> GetActiveBusinessesAsync();
+        Task<ImportHistoryResultDto> ImportHistoricalExcelAsync(Stream fileStream, string? business = null);
+        Task<ImportCsvResultDto> ImportBankCsvAsync(Stream fileStream, string? business = null);
         Task<int> AutoMatchReceiptsForQuarterAsync(Guid quarterId);
-        Task<IEnumerable<LedgerQuarterSummaryDto>> GetQuartersSummaryAsync();
+        Task<IEnumerable<LedgerQuarterSummaryDto>> GetQuartersSummaryAsync(string? business = null);
         Task<IEnumerable<LedgerTransactionDto>> GetQuarterTransactionsAsync(Guid quarterId);
         Task<LedgerTransactionDto?> UpdateTransactionAsync(Guid id, UpdateLedgerTransactionDto dto);
+        Task<bool> DeleteTransactionAsync(Guid id);
         Task<bool> FinalizeQuarterAsync(Guid quarterId);
         Task<bool> DeleteQuarterAsync(Guid quarterId);
         Task<byte[]> ExportQuarterExcelAsync(Guid quarterId);

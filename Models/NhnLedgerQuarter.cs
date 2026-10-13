@@ -11,6 +11,9 @@ namespace NHN.Power.API.Models
         [Column("id")]
         public Guid Id { get; set; } = Guid.NewGuid();
 
+        [Column("business")]
+        public string Business { get; set; } = "NHN POWER";
+
         [Column("year_quarter")]
         public string YearQuarter { get; set; } = string.Empty;
 

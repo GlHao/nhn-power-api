@@ -17,11 +17,26 @@ namespace NHN.Power.API.Repositories
             _context = context;
         }
 
-        // Quarters
-        public async Task<IEnumerable<NhnLedgerQuarter>> GetAllQuartersAsync()
+        // Businesses
+        public async Task<IEnumerable<NhnBusiness>> GetActiveBusinessesAsync()
         {
-            return await _context.LedgerQuarters
+            return await _context.Businesses
                 .AsNoTracking()
+                .Where(b => b.IsActive)
+                .OrderBy(b => b.SortOrder)
+                .ThenBy(b => b.Name)
+                .ToListAsync();
+        }
+
+        // Quarters
+        public async Task<IEnumerable<NhnLedgerQuarter>> GetAllQuartersAsync(string? business = null)
+        {
+            var query = _context.LedgerQuarters.AsNoTracking();
+            if (!string.IsNullOrWhiteSpace(business))
+            {
+                query = query.Where(q => q.Business == business);
+            }
+            return await query
                 .OrderByDescending(q => q.YearQuarter)
                 .ToListAsync();
         }
@@ -34,6 +49,11 @@ namespace NHN.Power.API.Repositories
         public async Task<NhnLedgerQuarter?> GetQuarterByYearQuarterAsync(string yearQuarter)
         {
             return await _context.LedgerQuarters.FirstOrDefaultAsync(q => q.YearQuarter == yearQuarter);
+        }
+
+        public async Task<NhnLedgerQuarter?> GetQuarterByBusinessAndYearQuarterAsync(string business, string yearQuarter)
+        {
+            return await _context.LedgerQuarters.FirstOrDefaultAsync(q => q.Business == business && q.YearQuarter == yearQuarter);
         }
 
         public async Task<NhnLedgerQuarter> AddQuarterAsync(NhnLedgerQuarter quarter)
@@ -142,6 +162,26 @@ namespace NHN.Power.API.Repositories
                 }
             }
             await _context.SaveChangesAsync();
+        }
+
+        public async Task DeleteTransactionAsync(Guid id)
+        {
+            var tx = await _context.LedgerTransactions.FirstOrDefaultAsync(t => t.Id == id);
+            if (tx != null)
+            {
+                if (tx.MatchedReceiptId.HasValue)
+                {
+                    var receipt = await _context.Receipts.FirstOrDefaultAsync(r => r.Id == tx.MatchedReceiptId.Value);
+                    if (receipt != null)
+                    {
+                        receipt.Status = "pending";
+                        receipt.MatchedTransactionId = null;
+                        receipt.UpdatedAt = DateTimeOffset.UtcNow;
+                    }
+                }
+                _context.LedgerTransactions.Remove(tx);
+                await _context.SaveChangesAsync();
+            }
         }
 
         public async Task DeleteTransactionsByQuarterIdAsync(Guid quarterId)
