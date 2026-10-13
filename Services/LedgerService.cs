@@ -270,9 +270,11 @@ namespace NHN.Power.API.Services
                 throw new ArgumentException("No valid transaction rows found in CSV.");
             }
 
-            // Determine Quarter from the first transaction
-            var sampleDate = parsedTxList.First().Date;
-            string yearQuarter = GetYearQuarter(sampleDate);
+            // Determine Quarter by grouping all transactions to find the dominant quarter
+            string yearQuarter = parsedTxList
+                .GroupBy(t => GetYearQuarter(t.Date))
+                .OrderByDescending(g => g.Count())
+                .First().Key;
 
             var quarter = await _ledgerRepository.GetQuarterByYearQuarterAsync(yearQuarter);
             if (quarter == null)
@@ -354,38 +356,63 @@ namespace NHN.Power.API.Services
             var transactions = (await _ledgerRepository.GetTransactionsByQuarterIdAsync(quarterId)).ToList();
             if (!transactions.Any()) return 0;
 
+            // Pre-load all pending receipts once to avoid N roundtrips over remote network
+            var pendingReceipts = (await _receiptRepository.GetAllAsync("pending"))
+                .Where(r => r.TransactionDate.HasValue)
+                .ToList();
+
+            if (!pendingReceipts.Any()) return 0;
+
             int matchCount = 0;
+            var matchedReceiptsSet = new HashSet<Guid>();
+            var txsToUpdate = new List<NhnLedgerTransaction>();
+            var receiptsToUpdate = new List<NhnReceipt>();
 
             foreach (var tx in transactions)
             {
                 if (tx.Status == "completed") continue;
 
-                // Match condition: Amount matches Math.Abs(tx.Amount) and TransactionDate within ±3 days
                 decimal targetAmount = Math.Abs(tx.Amount);
-                DateTime startDate = tx.TransactionDate.AddDays(-3);
-                DateTime endDate = tx.TransactionDate.AddDays(3);
+                var minDate = tx.TransactionDate.Date.AddDays(-3);
+                var maxDate = tx.TransactionDate.Date.AddDays(3);
 
-                var pendingReceipts = (await _receiptRepository.GetPendingReceiptsForMatchingAsync(startDate, endDate, targetAmount))
-                    .OrderBy(r => Math.Abs((tx.TransactionDate - (r.TransactionDate ?? tx.TransactionDate)).TotalDays))
-                    .ToList();
+                // Find candidate pending receipts not already matched in this run
+                var candidate = pendingReceipts
+                    .Where(r => !matchedReceiptsSet.Contains(r.Id)
+                                && r.TransactionDate.HasValue
+                                && r.TransactionDate.Value.Date >= minDate
+                                && r.TransactionDate.Value.Date <= maxDate
+                                && Math.Abs(r.TotalAmount - targetAmount) < 0.01m)
+                    .OrderBy(r => Math.Abs((tx.TransactionDate - r.TransactionDate!.Value).TotalDays))
+                    .FirstOrDefault();
 
-                if (pendingReceipts.Any())
+                if (candidate != null)
                 {
-                    var matchedReceipt = pendingReceipts.First();
+                    matchedReceiptsSet.Add(candidate.Id);
 
-                    // Update Transaction
-                    tx.GstAmount = matchedReceipt.GstAmount;
-                    tx.MatchedReceiptId = matchedReceipt.Id;
+                    // Update Transaction in memory
+                    tx.GstAmount = candidate.GstAmount;
+                    tx.MatchedReceiptId = candidate.Id;
                     tx.Status = "receipt_matched";
-                    await _ledgerRepository.UpdateTransactionAsync(tx);
+                    txsToUpdate.Add(tx);
 
-                    // Update Receipt
-                    matchedReceipt.Status = "matched";
-                    matchedReceipt.MatchedTransactionId = tx.Id;
-                    await _receiptRepository.UpdateAsync(matchedReceipt);
+                    // Update Receipt in memory
+                    candidate.Status = "matched";
+                    candidate.MatchedTransactionId = tx.Id;
+                    receiptsToUpdate.Add(candidate);
 
                     matchCount++;
                 }
+            }
+
+            // Batch save once
+            if (txsToUpdate.Any())
+            {
+                await _ledgerRepository.UpdateTransactionsAsync(txsToUpdate);
+            }
+            if (receiptsToUpdate.Any())
+            {
+                await _receiptRepository.UpdateRangeAsync(receiptsToUpdate);
             }
 
             return matchCount;

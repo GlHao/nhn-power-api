@@ -11,6 +11,7 @@ namespace NHN.Power.API.Repositories
         Task<NhnReceipt?> GetByIdAsync(Guid id);
         Task<NhnReceipt> AddAsync(NhnReceipt receipt);
         Task UpdateAsync(NhnReceipt receipt);
+        Task UpdateRangeAsync(IEnumerable<NhnReceipt> receipts);
         Task DeleteAsync(Guid id);
         Task<IEnumerable<NhnReceipt>> GetPendingReceiptsForMatchingAsync(DateTime startDate, DateTime endDate, decimal targetAmount);
     }

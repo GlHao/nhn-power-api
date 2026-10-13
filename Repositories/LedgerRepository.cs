@@ -122,6 +122,28 @@ namespace NHN.Power.API.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task UpdateTransactionsAsync(IEnumerable<NhnLedgerTransaction> transactions)
+        {
+            var list = transactions.ToList();
+            if (!list.Any()) return;
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var tx in list)
+            {
+                tx.UpdatedAt = now;
+                var tracked = _context.LedgerTransactions.Local.FirstOrDefault(x => x.Id == tx.Id);
+                if (tracked != null && tracked != tx)
+                {
+                    _context.Entry(tracked).CurrentValues.SetValues(tx);
+                }
+                else if (tracked == null)
+                {
+                    _context.LedgerTransactions.Update(tx);
+                }
+            }
+            await _context.SaveChangesAsync();
+        }
+
         public async Task DeleteTransactionsByQuarterIdAsync(Guid quarterId)
         {
             var existing = await _context.LedgerTransactions.Where(t => t.QuarterId == quarterId).ToListAsync();

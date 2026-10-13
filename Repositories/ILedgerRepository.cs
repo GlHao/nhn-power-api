@@ -20,6 +20,7 @@ namespace NHN.Power.API.Repositories
         Task<NhnLedgerTransaction?> GetTransactionByIdAsync(Guid id);
         Task AddTransactionsAsync(IEnumerable<NhnLedgerTransaction> transactions);
         Task UpdateTransactionAsync(NhnLedgerTransaction transaction);
+        Task UpdateTransactionsAsync(IEnumerable<NhnLedgerTransaction> transactions);
         Task DeleteTransactionsByQuarterIdAsync(Guid quarterId);
 
         // Rules

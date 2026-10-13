@@ -69,6 +69,28 @@ namespace NHN.Power.API.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task UpdateRangeAsync(IEnumerable<NhnReceipt> receipts)
+        {
+            var list = receipts.ToList();
+            if (!list.Any()) return;
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var r in list)
+            {
+                r.UpdatedAt = now;
+                var tracked = _context.Receipts.Local.FirstOrDefault(x => x.Id == r.Id);
+                if (tracked != null && tracked != r)
+                {
+                    _context.Entry(tracked).CurrentValues.SetValues(r);
+                }
+                else if (tracked == null)
+                {
+                    _context.Receipts.Update(r);
+                }
+            }
+            await _context.SaveChangesAsync();
+        }
+
         public async Task DeleteAsync(Guid id)
         {
             var receipt = await GetByIdAsync(id);
