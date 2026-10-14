@@ -30,6 +30,7 @@ namespace NHN.Power.API.Repositories
 
         // Rules
         Task<IEnumerable<NhnLedgerRule>> GetAllRulesAsync();
+        Task<NhnLedgerRule?> GetRuleByIdAsync(Guid id);
         Task<NhnLedgerRule?> GetRuleByKeywordAsync(string keyword);
         Task<NhnLedgerRule> AddRuleAsync(NhnLedgerRule rule);
         Task AddRulesAsync(IEnumerable<NhnLedgerRule> rules);

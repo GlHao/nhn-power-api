@@ -30,7 +30,7 @@ namespace NHN.Power.API.Functions
             _logger = logger;
         }
 
-        [Function("GetBusinesses")]
+        [Function("GetLedgerBusinesses")]
         public async Task<HttpResponseData> GetBusinesses(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "ledger/businesses")] HttpRequestData req)
         {
@@ -344,6 +344,42 @@ namespace NHN.Power.API.Functions
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(ApiResponse<LedgerRuleDto>.CreateSuccess(rule));
             return response;
+        }
+
+        [Function("UpdateRule")]
+        public async Task<HttpResponseData> UpdateRule(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "ledger/rules/{id}")] HttpRequestData req,
+            string id)
+        {
+            if (!Guid.TryParse(id, out var ruleId))
+            {
+                var badReq = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Invalid Rule ID format."));
+                return badReq;
+            }
+
+            var bodyText = await new StreamReader(req.Body).ReadToEndAsync();
+            var dto = JsonSerializer.Deserialize<CreateLedgerRuleDto>(bodyText, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Keyword) || string.IsNullOrWhiteSpace(dto.CategoryNote))
+            {
+                var badReq = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Keyword and CategoryNote are required."));
+                return badReq;
+            }
+
+            try
+            {
+                var rule = await _ledgerService.UpdateRuleAsync(ruleId, dto);
+                var response = req.CreateResponse(HttpStatusCode.OK);
+                await response.WriteAsJsonAsync(ApiResponse<LedgerRuleDto>.CreateSuccess(rule));
+                return response;
+            }
+            catch (KeyNotFoundException ex)
+            {
+                var notFound = req.CreateResponse(HttpStatusCode.NotFound);
+                await notFound.WriteAsJsonAsync(ApiResponse<object>.CreateError(ex.Message));
+                return notFound;
+            }
         }
 
         [Function("DeleteRule")]

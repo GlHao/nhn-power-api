@@ -203,6 +203,11 @@ namespace NHN.Power.API.Repositories
                 .ToListAsync();
         }
 
+        public async Task<NhnLedgerRule?> GetRuleByIdAsync(Guid id)
+        {
+            return await _context.LedgerRules.FirstOrDefaultAsync(r => r.Id == id);
+        }
+
         public async Task<NhnLedgerRule?> GetRuleByKeywordAsync(string keyword)
         {
             return await _context.LedgerRules

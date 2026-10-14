@@ -22,6 +22,7 @@ namespace NHN.Power.API.Services
 
         Task<IEnumerable<LedgerRuleDto>> GetAllRulesAsync();
         Task<LedgerRuleDto> CreateOrUpdateRuleAsync(CreateLedgerRuleDto dto);
+        Task<LedgerRuleDto> UpdateRuleAsync(Guid id, CreateLedgerRuleDto dto);
         Task<bool> DeleteRuleAsync(Guid id);
     }
 }

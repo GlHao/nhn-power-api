@@ -639,6 +639,28 @@ namespace NHN.Power.API.Services
             };
         }
 
+        public async Task<LedgerRuleDto> UpdateRuleAsync(Guid id, CreateLedgerRuleDto dto)
+        {
+            var rule = await _ledgerRepository.GetRuleByIdAsync(id);
+            if (rule == null)
+            {
+                throw new KeyNotFoundException($"Rule with ID '{id}' was not found.");
+            }
+
+            rule.Keyword = dto.Keyword.Trim();
+            rule.CategoryNote = dto.CategoryNote.Trim();
+            await _ledgerRepository.UpdateRuleAsync(rule);
+
+            return new LedgerRuleDto
+            {
+                Id = rule.Id,
+                Keyword = rule.Keyword,
+                CategoryNote = rule.CategoryNote,
+                CreatedAt = rule.CreatedAt,
+                UpdatedAt = rule.UpdatedAt
+            };
+        }
+
         public async Task<bool> DeleteRuleAsync(Guid id)
         {
             await _ledgerRepository.DeleteRuleAsync(id);
