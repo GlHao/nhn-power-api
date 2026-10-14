@@ -457,6 +457,12 @@ namespace NHN.Power.API.Services
                     Status = q.Status,
                     TotalTransactions = txs.Count,
                     TotalAmount = txs.Sum(t => t.Amount),
+                    TotalSalesAmount = txs
+                        .Where(t => t.Notes != null && 
+                            (t.Notes.Trim().Equals("sales", StringComparison.OrdinalIgnoreCase) || 
+                             t.Notes.Trim().Equals("salse", StringComparison.OrdinalIgnoreCase) ||
+                             t.Notes.Trim().ToLower().StartsWith("sales")))
+                        .Sum(t => t.Amount),
                     TotalGst = txs.Sum(t => t.GstAmount),
                     UncategorizedCount = txs.Count(t => t.Status == "uncategorized"),
                     RuleMatchedCount = txs.Count(t => t.Status == "rule_matched"),

@@ -20,6 +20,7 @@ namespace NHN.Power.API.DTOs.Ledger
         public string Status { get; set; } = "draft"; // draft | completed
         public int TotalTransactions { get; set; }
         public decimal TotalAmount { get; set; }
+        public decimal TotalSalesAmount { get; set; }
         public decimal TotalGst { get; set; }
         public int UncategorizedCount { get; set; }
         public int RuleMatchedCount { get; set; }
