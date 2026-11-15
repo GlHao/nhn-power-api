@@ -22,6 +22,13 @@ namespace NHN.Power.API.Data
         public DbSet<NhnLedgerTransaction> LedgerTransactions { get; set; } = null!;
         public DbSet<TodoGroup> TodoGroups { get; set; } = null!;
         public DbSet<TodoItem> TodoItems { get; set; } = null!;
+        public DbSet<JanikingReport> JanikingReports { get; set; } = null!;
+        public DbSet<JanikingClient> JanikingClients { get; set; } = null!;
+        public DbSet<JanikingChargeBack> JanikingChargeBacks { get; set; } = null!;
+        public DbSet<AdhocTask> AdhocTasks { get; set; } = null!;
+        public DbSet<TaskPhoto> TaskPhotos { get; set; } = null!;
+        public DbSet<TaxBracket> TaxBrackets { get; set; } = null!;
+        public DbSet<PropertyLead> PropertyLeads { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

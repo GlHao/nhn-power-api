@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Azure;
 using Azure.AI.DocumentIntelligence;
@@ -22,6 +24,7 @@ namespace NHN.Power.API.Services
     public interface IAzureDocumentIntelligenceService
     {
         Task<ReceiptOcrResult> AnalyzeReceiptAsync(byte[] fileBytes, string contentType);
+        Task<string> AnalyzeLayoutTextAsync(byte[] fileBytes);
     }
 
     public class AzureDocumentIntelligenceService : IAzureDocumentIntelligenceService
@@ -107,6 +110,83 @@ namespace NHN.Power.API.Services
             }
 
             return result;
+        }
+
+        public async Task<string> AnalyzeLayoutTextAsync(byte[] fileBytes)
+        {
+            if (string.IsNullOrWhiteSpace(_endpoint) || string.IsNullOrWhiteSpace(_apiKey))
+            {
+                _logger.LogWarning("Azure Document Intelligence endpoint or key is missing. Skipping layout analysis.");
+                return string.Empty;
+            }
+
+            try
+            {
+                using var httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _apiKey);
+
+                var url = $"{_endpoint.TrimEnd('/')}/documentintelligence/documentModels/prebuilt-layout:analyze?api-version=2024-11-30";
+                var byteContent = new ByteArrayContent(fileBytes);
+                byteContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+                _logger.LogInformation("Submitting layout analysis request to Azure Document Intelligence (2024-11-30)...");
+                var postResponse = await httpClient.PostAsync(url, byteContent);
+
+                if (!postResponse.IsSuccessStatusCode)
+                {
+                    var err = await postResponse.Content.ReadAsStringAsync();
+                    _logger.LogError("Azure Document Intelligence submit failed with status {Status}: {Error}", postResponse.StatusCode, err);
+                    return string.Empty;
+                }
+
+                if (!postResponse.Headers.TryGetValues("Operation-Location", out var opLocations))
+                {
+                    _logger.LogError("Operation-Location header missing from Azure Document Intelligence response.");
+                    return string.Empty;
+                }
+
+                var opUrl = opLocations.First();
+
+                // Poll for result (up to 30 seconds)
+                for (int i = 0; i < 30; i++)
+                {
+                    await Task.Delay(1000);
+                    var pollResponse = await httpClient.GetAsync(opUrl);
+                    if (!pollResponse.IsSuccessStatusCode) continue;
+
+                    var pollJson = await pollResponse.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(pollJson);
+                    var root = doc.RootElement;
+
+                    if (root.TryGetProperty("status", out var statusProp))
+                    {
+                        var status = statusProp.GetString();
+                        if (status == "succeeded")
+                        {
+                            if (root.TryGetProperty("analyzeResult", out var analyzeResult) &&
+                                analyzeResult.TryGetProperty("content", out var contentProp))
+                            {
+                                var text = contentProp.GetString() ?? string.Empty;
+                                _logger.LogInformation("Layout analysis succeeded. Extracted {Length} chars.", text.Length);
+                                return text;
+                            }
+                            break;
+                        }
+                        else if (status == "failed")
+                        {
+                            _logger.LogError("Layout analysis failed in Azure Document Intelligence: {Json}", pollJson);
+                            break;
+                        }
+                    }
+                }
+
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to analyze document layout with Azure Document Intelligence.");
+                return string.Empty;
+            }
         }
 
         private void ExtractFieldsFromDocument(AnalyzedDocument doc, ReceiptOcrResult result)

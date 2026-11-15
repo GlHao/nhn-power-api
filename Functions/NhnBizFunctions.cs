@@ -12,7 +12,9 @@ using NHN.Power.API.DTOs.Site;
 using NHN.Power.API.DTOs.BillingRule;
 using NHN.Power.API.DTOs.ScheduleRule;
 using NHN.Power.API.DTOs.TaxInvoice;
+using NHN.Power.API.Models;
 using NHN.Power.API.Services;
+using System.Web;
 
 namespace NHN.Power.API.Functions
 {
@@ -531,6 +533,80 @@ namespace NHN.Power.API.Functions
                 _logger.LogError($"Error generating preview: {ex.Message}");
                 var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
                 await errorResponse.WriteStringAsync(ex.Message);
+                return errorResponse;
+            }
+        }
+
+        [Function("GetUninvoicedTasks")]
+        public async Task<HttpResponseData> GetUninvoicedTasks(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "tax-invoices/uninvoiced-tasks")] HttpRequestData req)
+        {
+            _logger.LogInformation("Retrieving uninvoiced ad-hoc tasks for billing preview.");
+
+            try
+            {
+                var query = HttpUtility.ParseQueryString(req.Url.Query);
+                string? clientIdStr = query["clientId"];
+                string? startStr = query["periodStart"] ?? query["startDate"];
+                string? endStr = query["periodEnd"] ?? query["endDate"];
+
+                if (!Guid.TryParse(clientIdStr, out var clientId))
+                {
+                    var badReq = req.CreateResponse(HttpStatusCode.BadRequest);
+                    await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Valid clientId is required."));
+                    return badReq;
+                }
+
+                if (!DateTime.TryParse(startStr, out var periodStart) || !DateTime.TryParse(endStr, out var periodEnd))
+                {
+                    var badReq = req.CreateResponse(HttpStatusCode.BadRequest);
+                    await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("Valid periodStart and periodEnd dates are required."));
+                    return badReq;
+                }
+
+                var candidates = await _previewService.GetUninvoicedTasksAsync(clientId, periodStart, periodEnd);
+                var response = req.CreateResponse(HttpStatusCode.OK);
+                await response.WriteAsJsonAsync(ApiResponse<List<UninvoicedAdhocTaskCandidateDto>>.CreateSuccess(candidates));
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving uninvoiced adhoc tasks.");
+                var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await errorResponse.WriteAsJsonAsync(ApiResponse<object>.CreateError(ex.Message));
+                return errorResponse;
+            }
+        }
+
+        [Function("MarkTasksInvoiced")]
+        public async Task<HttpResponseData> MarkTasksInvoiced(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "tax-invoices/mark-tasks-invoiced")] HttpRequestData req)
+        {
+            _logger.LogInformation("Marking ad-hoc tasks as invoiced.");
+
+            try
+            {
+                string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var requestDto = JsonSerializer.Deserialize<MarkAdhocTasksInvoicedRequestDto>(requestBody, options);
+
+                if (requestDto == null || requestDto.TaskIds == null || !requestDto.TaskIds.Any())
+                {
+                    var badReq = req.CreateResponse(HttpStatusCode.BadRequest);
+                    await badReq.WriteAsJsonAsync(ApiResponse<object>.CreateError("TaskIds cannot be empty."));
+                    return badReq;
+                }
+
+                var result = await _previewService.MarkTasksInvoicedAsync(requestDto);
+                var response = req.CreateResponse(HttpStatusCode.OK);
+                await response.WriteAsJsonAsync(ApiResponse<MarkAdhocTasksInvoicedResultDto>.CreateSuccess(result, $"Successfully marked {result.UpdatedCount} task(s) as invoiced."));
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking adhoc tasks as invoiced.");
+                var errorResponse = req.CreateResponse(HttpStatusCode.InternalServerError);
+                await errorResponse.WriteAsJsonAsync(ApiResponse<object>.CreateError(ex.Message));
                 return errorResponse;
             }
         }

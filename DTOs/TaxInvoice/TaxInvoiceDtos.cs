@@ -20,6 +20,7 @@ namespace NHN.Power.API.DTOs.TaxInvoice
         public Guid ClientId { get; set; }
         public DateTime PeriodStart { get; set; }
         public DateTime PeriodEnd { get; set; }
+        public List<Guid>? IncludedAdhocTaskIds { get; set; }
     }
 
     public class TaxInvoicePreviewItemDto
@@ -66,5 +67,31 @@ namespace NHN.Power.API.DTOs.TaxInvoice
     {
         public TaxInvoicePdfRequestDto PdfRequest { get; set; } = null!;
         public string? TargetEmails { get; set; } // 如果非空，优先使用此字段（支持逗号分隔）；如果为空，使用 Preview.ClientEmail
+    }
+
+    public class UninvoicedAdhocTaskCandidateDto
+    {
+        public Guid Id { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string Address { get; set; } = string.Empty;
+        public DateTime TaskDate { get; set; }
+        public string? TaskTime { get; set; }
+        public bool IsSiteMatched { get; set; }
+        public Guid? MatchedSiteId { get; set; }
+        public string? MatchedSiteName { get; set; }
+    }
+
+    public class MarkAdhocTasksInvoicedRequestDto
+    {
+        public List<Guid> TaskIds { get; set; } = new();
+        public Guid? TaxInvoiceId { get; set; }
+        public string? InvoiceNo { get; set; }
+    }
+
+    public class MarkAdhocTasksInvoicedResultDto
+    {
+        public int UpdatedCount { get; set; }
+        public List<Guid> UpdatedTaskIds { get; set; } = new();
     }
 }

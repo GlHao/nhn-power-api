@@ -98,6 +98,15 @@ builder.Services.AddScoped<ILedgerService, LedgerService>();
 builder.Services.AddScoped<ITodoRepository, TodoRepository>();
 builder.Services.AddScoped<ITodoService, TodoService>();
 
+// V4 Jani-King & Task DI Registrations
+builder.Services.AddScoped<IJanikingPdfParserService, JanikingPdfParserService>();
+builder.Services.AddScoped<IJanikingService, JanikingService>();
+builder.Services.AddScoped<ITaskService, TaskService>();
+
+// V5 Finance & Property Leads DI Registrations
+builder.Services.AddScoped<IFinanceService, FinanceService>();
+builder.Services.AddScoped<IPropertyLeadService, PropertyLeadService>();
+
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 builder.Services.AddDbContext<NHN.Power.API.Data.AppDbContext>((serviceProvider, options) =>

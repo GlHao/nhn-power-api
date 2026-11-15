@@ -25,6 +25,10 @@ namespace NHN.Power.API.Services
             var s3Config = new AmazonS3Config
             {
                 ServiceURL = $"https://{_appSettings.R2AccountId}.r2.cloudflarestorage.com",
+                AuthenticationRegion = "auto",
+                ForcePathStyle = true,
+                Timeout = TimeSpan.FromSeconds(5),
+                MaxErrorRetry = 1
             };
 
             _s3Client = new AmazonS3Client(

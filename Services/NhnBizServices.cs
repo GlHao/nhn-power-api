@@ -10,6 +10,8 @@ using NHN.Power.API.DTOs.TaxInvoice;
 using NHN.Power.API.DTOs.Employee;
 using NHN.Power.API.Models;
 using NHN.Power.API.Repositories;
+using NHN.Power.API.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace NHN.Power.API.Services
 {
@@ -77,6 +79,8 @@ namespace NHN.Power.API.Services
     public interface ITaxInvoicePreviewService
     {
         Task<TaxInvoicePreviewDto> GeneratePreviewAsync(TaxInvoicePreviewRequestDto request);
+        Task<List<UninvoicedAdhocTaskCandidateDto>> GetUninvoicedTasksAsync(Guid clientId, DateTime periodStart, DateTime periodEnd);
+        Task<MarkAdhocTasksInvoicedResultDto> MarkTasksInvoicedAsync(MarkAdhocTasksInvoicedRequestDto request);
     }
 
     public interface ITaxInvoicePdfService
@@ -690,6 +694,7 @@ namespace NHN.Power.API.Services
         private readonly IBillingRuleRepository _billingRuleRepository;
         private readonly IScheduleCalculator _scheduleCalculator;
         private readonly IBillingCalculator _billingCalculator;
+        private readonly AppDbContext _dbContext;
 
         public TaxInvoicePreviewService(
             IClientRepository clientRepository,
@@ -697,7 +702,8 @@ namespace NHN.Power.API.Services
             IScheduleRuleRepository scheduleRuleRepository,
             IBillingRuleRepository billingRuleRepository,
             IScheduleCalculator scheduleCalculator,
-            IBillingCalculator billingCalculator)
+            IBillingCalculator billingCalculator,
+            AppDbContext dbContext)
         {
             _clientRepository = clientRepository;
             _siteRepository = siteRepository;
@@ -705,6 +711,7 @@ namespace NHN.Power.API.Services
             _billingRuleRepository = billingRuleRepository;
             _scheduleCalculator = scheduleCalculator;
             _billingCalculator = billingCalculator;
+            _dbContext = dbContext;
         }
 
         public async Task<TaxInvoicePreviewDto> GeneratePreviewAsync(TaxInvoicePreviewRequestDto request)
@@ -745,13 +752,138 @@ namespace NHN.Power.API.Services
                 }
             }
 
+            // 并入选中的临时任务 (Ad-hoc Tasks)
+            if (request.IncludedAdhocTaskIds != null && request.IncludedAdhocTaskIds.Any())
+            {
+                var adhocTasks = await _dbContext.AdhocTasks
+                    .AsNoTracking()
+                    .Where(t => request.IncludedAdhocTaskIds.Contains(t.Id))
+                    .ToListAsync();
+
+                foreach (var task in adhocTasks)
+                {
+                    var gst = Math.Round(task.Amount * 0.10m, 2);
+                    var adhocItem = new TaxInvoicePreviewItemDto
+                    {
+                        SiteId = null,
+                        SiteName = !string.IsNullOrWhiteSpace(task.Address) ? task.Address : "Ad-hoc Task",
+                        ServiceDate = task.TaskDate,
+                        DayOfWeek = (int)task.TaskDate.DayOfWeek,
+                        Description = "Ad-hoc: " + task.Description,
+                        BaseAmountExGst = task.Amount,
+                        ExtraAmountExGst = 0m,
+                        FinalAmountExGst = task.Amount,
+                        GstAmount = gst,
+                        FinalAmountIncGst = task.Amount + gst,
+                        Note = $"临时任务 (ID: {task.Id})",
+                        Status = "adhoc_task"
+                    };
+
+                    preview.Items.Add(adhocItem);
+                }
+            }
+
             preview.Items = preview.Items.OrderBy(i => i.ServiceDate).ThenBy(i => i.SiteName).ToList();
 
-            preview.SubtotalExGst = preview.Items.Sum(i => i.FinalAmountExGst);
-            preview.GstAmount = Math.Round(preview.SubtotalExGst * 0.1m, 2);
+            preview.SubtotalExGst = Math.Round(preview.Items.Sum(i => i.FinalAmountExGst), 2);
+            preview.GstAmount = Math.Round(preview.SubtotalExGst * 0.10m, 2);
             preview.TotalIncGst = preview.SubtotalExGst + preview.GstAmount;
 
             return preview;
+        }
+
+        public async Task<List<UninvoicedAdhocTaskCandidateDto>> GetUninvoicedTasksAsync(Guid clientId, DateTime periodStart, DateTime periodEnd)
+        {
+            var sites = (await _siteRepository.GetByClientIdAsync(clientId)).ToList();
+            var sDate = periodStart.Date;
+            var eDate = periodEnd.Date;
+
+            var tasks = await _dbContext.AdhocTasks
+                .AsNoTracking()
+                .Where(t => !t.IsInvoiced && t.TaskDate >= sDate && t.TaskDate <= eDate)
+                .OrderBy(t => t.TaskDate)
+                .ThenBy(t => t.CreatedAt)
+                .ToListAsync();
+
+            var candidates = new List<UninvoicedAdhocTaskCandidateDto>();
+
+            foreach (var task in tasks)
+            {
+                var candidate = new UninvoicedAdhocTaskCandidateDto
+                {
+                    Id = task.Id,
+                    Description = task.Description,
+                    Amount = task.Amount,
+                    Address = task.Address,
+                    TaskDate = task.TaskDate,
+                    TaskTime = task.TaskTime,
+                    IsSiteMatched = false
+                };
+
+                // 智能站点匹配
+                if (!string.IsNullOrWhiteSpace(task.Address))
+                {
+                    var taskAddr = task.Address.Trim();
+                    foreach (var site in sites)
+                    {
+                        bool isMatch = false;
+                        if (!string.IsNullOrWhiteSpace(site.Address) &&
+                            (taskAddr.Contains(site.Address, StringComparison.OrdinalIgnoreCase) ||
+                             site.Address.Contains(taskAddr, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            isMatch = true;
+                        }
+                        else if (!string.IsNullOrWhiteSpace(site.Name) &&
+                            (taskAddr.Contains(site.Name, StringComparison.OrdinalIgnoreCase) ||
+                             site.Name.Contains(taskAddr, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            isMatch = true;
+                        }
+
+                        if (isMatch)
+                        {
+                            candidate.IsSiteMatched = true;
+                            candidate.MatchedSiteId = site.Id;
+                            candidate.MatchedSiteName = site.Name;
+                            break;
+                        }
+                    }
+                }
+
+                candidates.Add(candidate);
+            }
+
+            return candidates;
+        }
+
+        public async Task<MarkAdhocTasksInvoicedResultDto> MarkTasksInvoicedAsync(MarkAdhocTasksInvoicedRequestDto request)
+        {
+            var result = new MarkAdhocTasksInvoicedResultDto();
+            if (request.TaskIds == null || !request.TaskIds.Any())
+            {
+                return result;
+            }
+
+            var tasks = await _dbContext.AdhocTasks
+                .Where(t => request.TaskIds.Contains(t.Id))
+                .ToListAsync();
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var t in tasks)
+            {
+                t.IsInvoiced = true;
+                t.InvoicedAt = now;
+                if (request.TaxInvoiceId.HasValue)
+                {
+                    t.TaxInvoiceId = request.TaxInvoiceId.Value;
+                }
+                t.UpdatedAt = now;
+                result.UpdatedTaskIds.Add(t.Id);
+            }
+
+            await _dbContext.SaveChangesAsync();
+            result.UpdatedCount = result.UpdatedTaskIds.Count;
+            return result;
         }
     }
 }
